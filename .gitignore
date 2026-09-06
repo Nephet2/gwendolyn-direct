@@ -1,0 +1,17 @@
+.venv/
+.venv-*/
+__pycache__/
+*.py[cod]
+*.log
+*.bak
+backups/
+config.json
+director_profile.json
+director_voices.json
+private_lexicon.json
+gwendolyn_memory.json
+session_journal*.json*
+handoff/
+voices/*
+!voices/README.md
+dist/

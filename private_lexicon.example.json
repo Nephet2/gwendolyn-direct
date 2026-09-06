@@ -1,0 +1,7 @@
+{
+  "language_level": "Natural",
+  "anatomy_terms": "",
+  "sensation_terms": "",
+  "signal_associations": "",
+  "language_notes": "Add only vocabulary and associations you want the local model to use. Treat personal sensation terms as user reports, not telemetry or medical facts."
+}
