@@ -2,14 +2,14 @@
 
 Gwendolyn is a local voice-and-text AI Director for [Vector 1A](https://github.com/Nephet2/restim-vector-live). It reads Vector's Director API, discusses the live state with a locally hosted language model, and can perform the bounded Vector actions exposed by that API.
 
-This is an early public alpha for Windows. It contains the v0.46.10 application line with Vector integration, local persistent memory, multiple model backends, optional local speech, heart-tempo following and sensor auto-reconnect. Personal configuration, memories, logs, handoffs, model files and voice recordings are not included.
+This is an early public alpha for Windows. It contains the v0.46.10 application line with Vector integration, local persistent memory, multiple model backends, optional local speech, heart-tempo following, curated temporary Vector events and sensor auto-reconnect. Personal configuration, memories, logs, handoffs, model files and voice recordings are not included.
 
 ## What you need
 
 - Windows 10 or 11
 - 64-bit Python 3.11 or 3.12
 - A local model server: Ollama is the easiest starting point; llama.cpp is supported through its OpenAI-compatible server
-- [Vector 1A v1.6.0-alpha76](https://github.com/Nephet2/restim-vector-live/releases/tag/v1.6.0-alpha76) or newer
+- [Vector 1A v1.6.0-alpha77](https://github.com/Nephet2/restim-vector-live/releases/tag/v1.6.0-alpha77) or newer
 - A microphone for voice input; text input works without one
 - Optional: Kokoro or Chatterbox for spoken replies
 
@@ -31,6 +31,8 @@ Text chat and model/Vector control work when a speech bridge is unavailable. For
 ## Responsible operation
 
 Gwendolyn can request real output changes through Vector. Configure and test Vector's own output limits first, retain immediate access to Neutral/stop and the physical master level, and begin each new setup at a low level. Autonomous generated motion is off by default and must be deliberately enabled in Gwendolyn.
+
+Custom events also require a separate Vector opt-in. Their names describe authored recipes, not measured sensations. Vector limits Gwendolyn to the curated catalogue and a 2–30 second duration; Neutral and Stop clear active events.
 
 The project is intended for consenting adults. It is not a medical device and cannot infer subjective sensation from telemetry. Keep Vector, model and speech servers bound to localhost unless you have secured them yourself.
 

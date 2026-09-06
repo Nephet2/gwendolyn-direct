@@ -42,7 +42,7 @@ from tts_adapter import TTSAdapter
 from session_conductor import SessionConductor, due_seconds, valid_time, matches
 from restim_sensor_bridge import RestimSensorBridge
 
-APP_VERSION = "0.46.10-alpha1"
+APP_VERSION = "0.46.10-alpha2"
 SESSION_MODE = os.environ.get("GWENDOLYN_SESSION_MODE", "vector").strip().lower()
 if SESSION_MODE not in {"vector", "signal_lab"}:
     SESSION_MODE = "vector"
@@ -263,6 +263,7 @@ Conversation rules:
 - You may tease, observe, remember feedback, or make a brief suggestion. Do not narrate technical details unless they are useful.
 - Never claim Vector changed unless a Vector tool result confirms it.
 - Use Vector tools when the user explicitly asks for a Vector change. Do not make an unsolicited physical-output change merely because they praised or criticized a sensation.
+- Custom events are temporary named Vector recipes. Trigger only a recipe offered by the tool, respect Vector's operator opt-in, and never imply that its name proves a particular physical sensation.
 - Treat Neutral/stop requests as immediate.
 - If a requested semantic profile is unavailable, say so briefly rather than pretending it was applied.
 - No emojis in spoken replies.
@@ -607,6 +608,7 @@ CONTROL AND GROUNDING
 Vector and Restim enforce the operator-configured output limits, while the user controls physical master volume. Treat available Vector actions as bounded application controls. Current autonomy mode is {autonomy}: follow that mode, execute requested or authorised changes without unnecessary caution, and respond immediately to stop or neutral requests.
 Never claim an action happened unless this turn contains its successful tool result. A suggestion remains a proposal until accepted and executed. Never invent measured sensation, live state, an upcoming timeline event or precise timing. These grounding rules constrain control claims—not vocabulary, fictional narration, personality or consensual adult expression.
 After a successful action, confirm it naturally without tool names, JSON, API fields or diagnostic language. If an action fails, say so plainly. Do not propose a setting already shown as active. If no useful change is needed, continue the conversation rather than manufacturing one.
+Custom events are short, temporary Vector-owned recipes layered over the underlying signal. Use only the curated event tool and its duration bound. Treat custom_events.active as execution state, not as evidence of what the user physically feels.
 
 OFFLINE SIGNAL LAB
 This experimental build may provide three Signal Lab tools. Signal Lab is a separate offline simulator with an operator-armed audible headphone monitor; it never controls physical output. Its left lane represents Stairway to Heaven E1↔E4; its right lane represents The Moaner tip↔base. In /v1/state, the live object is authoritative for the signal currently displayed or monitored: use live.left_signal and live.right_signal exactly, including their independent carrier, AM, secondary-AM, FM, volume and ramp values. Never substitute active_preset starting values for live signal values, never collapse unequal lanes into one carrier, and never call a modulated signal steady. live.headphone_monitor describes audible preview only, while physical_output_enabled remains false. Operator-owned presets define the permitted ranges for Director commands; they do not describe a loaded reference session's current state. Each lane uses 0–100 semantic positions: intensity, texture (rougher to smoother), vibration_rate, vibration_depth, secondary_rate, secondary_depth and modulation. The last three are optional; omit them when no deliberate secondary vibration or FM movement is needed. Use independent lane values when contrast serves the moment. Never describe an offline Signal Lab command or headphone monitor as live physical output. Read its state when needed, and use Signal Lab neutral immediately when the user asks to neutralise the offline signal simulation.
@@ -1110,6 +1112,8 @@ TOOLS = [
     {"type":"function","function":{"name":"vector_set_targeting","description":"Apply a bounded deterministic targeted-stroke preset. base_prostate concentrates primary motion toward E4/root/base and secondary motion toward A/prostate. glans_perineum shifts the opposite way. broad/focused/tight progressively compress stroke range while increasing position bias. Use authored to restore the unmodified authored stroke path.","parameters":{"type":"object","properties":{"preset":{"type":"string","enum":["authored","base_prostate_broad","base_prostate_focused","base_prostate_tight","glans_perineum_broad","glans_perineum_focused","glans_perineum_tight"]}},"required":["preset"]}}},
     {"type":"function","function":{"name":"vector_tempo_window","description":"Temporarily time-warp the authored funscript at 0.5x for relief/contrast or 2x for challenge, then automatically restore authored tempo. Choose only 10,15,30,60,90,120 seconds. When current authored energy is challenging/testing, 2x is limited by Vector to 10-15 seconds; relaxing/moderate sections may sensibly use 30-60 seconds.","parameters":{"type":"object","properties":{"scale":{"type":"number","enum":[0.5,2.0]},"duration_seconds":{"type":"integer","enum":[10,15,30,60,90,120]}},"required":["scale","duration_seconds"]}}},
     {"type":"function","function":{"name":"vector_restore_modifiers","description":"Restore authored stroke targeting and authored 1x tempo, removing temporary deterministic modifiers.","parameters":{"type":"object","properties":{}}}},
+    {"type":"function","function":{"name":"vector_trigger_event","description":"Trigger one temporary Vector-owned custom-event recipe. Vector must have curated Director events enabled and enforces the recipe catalogue and duration bounds. Use this only for a requested or authorised change; describe the qualitative event naturally after success.","parameters":{"type":"object","properties":{"event":{"type":"string","enum":["mcb_tease","mcb_throb","mcb_calm","mcb_intensity_build","mcb_release","clutch_tranquil","clutch_pulse_wobble","pulse_freq_shift","pulse_width_shift","volume_shift"]},"duration_seconds":{"type":"number","minimum":2,"maximum":30}},"required":["event"]}}},
+    {"type":"function","function":{"name":"vector_cancel_events","description":"Cancel all currently active temporary custom events and return immediately to the underlying Vector signal.","parameters":{"type":"object","properties":{}}}},
 ]
 
 
@@ -1487,6 +1491,8 @@ def select_tools_for_turn(text: str, pending_proposal: str = "") -> List[Dict[st
     # with a handful of relevant tools than with the whole Director catalogue.
     if re.search(r"\b(?:tempo|speed|pace|double|twice|half speed|faster|slower)\b", t):
         add("vector_tempo_window", "vector_restore_modifiers")
+    if re.search(r"\b(?:custom event|tease|throb|calm|tranquil|wobble|pulse shift|frequency shift|temporary effect|release)\w*\b", t):
+        add("vector_trigger_event", "vector_cancel_events")
     if re.search(r"\b(?:stroke|stroke range|target|targeted|concentrat|narrow|widen|broaden)\w*\b", t):
         add("vector_adjust_stroke_range", "vector_set_targeting", "vector_restore_modifiers")
     if re.search(r"\b(?:texture|smooth|rough)\w*\b", t):
@@ -1512,6 +1518,7 @@ def select_tools_for_turn(text: str, pending_proposal: str = "") -> List[Dict[st
             "vector_set_texture", "vector_set_variation",
             "vector_set_primary_spatial", "vector_set_targeting",
             "vector_tempo_window",
+            "vector_trigger_event",
         )
 
     return _tool_subset(*groups[:6])
@@ -2856,6 +2863,12 @@ This personality governs selection, pacing and interpretation—not Vector truth
             "vector_set_targeting": ("POST", "/v1/modifier/target", {"preset": args.get("preset")}),
             "vector_tempo_window": ("POST", "/v1/modifier/tempo", {"scale": args.get("scale"), "duration_seconds": args.get("duration_seconds")}),
             "vector_restore_modifiers": ("POST", "/v1/modifier/restore", {}),
+            "vector_trigger_event": ("POST", "/v1/event/trigger", {
+                "event": args.get("event"),
+                **({"duration_seconds": args.get("duration_seconds")}
+                   if args.get("duration_seconds") is not None else {}),
+            }),
+            "vector_cancel_events": ("POST", "/v1/event/cancel", {}),
         }
         if name not in mapping:
             return {"ok": False, "error": f"Unknown tool {name}"}
@@ -2914,6 +2927,7 @@ This personality governs selection, pacing and interpretation—not Vector truth
             "modifier": s.get("modifier"),
             "future": s.get("future"),
             "timeline": s.get("timeline"),
+            "custom_events": s.get("custom_events"),
             "routing": s.get("routing") or s.get("routing_mode"),
         }
 

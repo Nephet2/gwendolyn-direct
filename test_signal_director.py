@@ -14,7 +14,7 @@ class SignalDirectorVariantTests(unittest.TestCase):
         ast.parse(SOURCE)
 
     def test_version_and_tools_are_present(self):
-        self.assertIn('APP_VERSION = "0.46.10-alpha1"', SOURCE)
+        self.assertIn('APP_VERSION = "0.46.10-alpha2"', SOURCE)
         self.assertIn('def signal_lab_preset_start_args', SOURCE)
         self.assertIn('conducted_preset_baseline_confirmed', SOURCE)
         self.assertIn('Signal Lab did not verify the active preset baseline', SOURCE)
@@ -29,6 +29,15 @@ class SignalDirectorVariantTests(unittest.TestCase):
         self.assertIn('Do not repeatedly ask them to classify routine readings.', SOURCE)
         for name in ("signal_lab_get_state", "signal_lab_apply", "signal_lab_heart_tempo", "signal_lab_neutral"):
             self.assertIn(f'"name":"{name}"', SOURCE)
+
+    def test_curated_vector_events_are_bounded_and_grounded(self):
+        self.assertIn('"name":"vector_trigger_event"', SOURCE)
+        self.assertIn('"name":"vector_cancel_events"', SOURCE)
+        self.assertIn('"minimum":2,"maximum":30', SOURCE)
+        self.assertIn('"/v1/event/trigger"', SOURCE)
+        self.assertIn('"/v1/event/cancel"', SOURCE)
+        self.assertIn('"custom_events": s.get("custom_events")', SOURCE)
+        self.assertIn('never imply that its name proves a particular physical sensation', SOURCE)
 
     def test_director_voices_are_loaded_from_editable_json(self):
         voices_path = ROOT / "director_voices.example.json"

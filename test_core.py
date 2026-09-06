@@ -47,7 +47,7 @@ assert 'authoritative media time' in prompt
 print('v0.18 direct-player timeline assertions: PASS')
 
 src = Path('gwendolyn_direct.py').read_text(encoding='utf-8')
-assert 'APP_VERSION = "0.46.10-alpha1"' in src
+assert 'APP_VERSION = "0.46.10-alpha2"' in src
 assert 'SESSION FINISH requested; awaiting closing reflection' in src
 assert 'SESSION FINISH confirmed; {controller} stopped before farewell' in src
 assert 'self.execute_tool("vector_stop", {})' in src
