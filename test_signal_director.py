@@ -14,7 +14,7 @@ class SignalDirectorVariantTests(unittest.TestCase):
         ast.parse(SOURCE)
 
     def test_version_and_tools_are_present(self):
-        self.assertIn('APP_VERSION = "0.46.10-alpha2"', SOURCE)
+        self.assertIn('APP_VERSION = "0.46.11-alpha1"', SOURCE)
         self.assertIn('def signal_lab_preset_start_args', SOURCE)
         self.assertIn('conducted_preset_baseline_confirmed', SOURCE)
         self.assertIn('Signal Lab did not verify the active preset baseline', SOURCE)
@@ -129,8 +129,8 @@ class SignalDirectorVariantTests(unittest.TestCase):
 
     def test_signal_action_uses_fast_grounded_confirmation(self):
         self.assertIn('OLLAMA ROUTE signal-json-primary tools=0', SOURCE)
-        self.assertIn('if direct or signal_request:', SOURCE)
-        self.assertIn('confirmation_kind = "Signal Lab" if signal_request else "direct action"', SOURCE)
+        self.assertIn('if direct or signal_request or exact_vector_confirmation:', SOURCE)
+        self.assertIn('"exact Vector action" if exact_vector_confirmation', SOURCE)
 
     def test_incomplete_signal_action_is_rejected_and_named_correctly(self):
         self.assertIn('Incomplete Signal Lab command; both lanes and transition are required', SOURCE)

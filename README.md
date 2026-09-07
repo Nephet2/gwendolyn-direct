@@ -2,7 +2,9 @@
 
 Gwendolyn is a local voice-and-text AI Director for [Vector 1A](https://github.com/Nephet2/restim-vector-live). It reads Vector's Director API, discusses the live state with a locally hosted language model, and can perform the bounded Vector actions exposed by that API.
 
-This is an early public alpha for Windows. It contains the v0.46.10 application line with Vector integration, local persistent memory, multiple model backends, optional local speech, heart-tempo following, curated temporary Vector events and sensor auto-reconnect. Personal configuration, memories, logs, handoffs, model files and voice recordings are not included.
+This is an early public alpha for Windows. It contains the v0.46.11 application line with Vector integration, local persistent memory, multiple model backends, optional local speech, heart-tempo following, curated temporary Vector events, sensor auto-reconnect and Signal Lab conducted-session refinements. Personal configuration, memories, logs, handoffs, model files and voice recordings are not included.
+
+Signal Lab is published separately at [Nephet2/gwendolyn-signal-lab](https://github.com/Nephet2/gwendolyn-signal-lab). Vector control uses [Vector 1A](https://github.com/Nephet2/restim-vector-live); v0.46.11 is intended for Vector alpha78 or newer.
 
 ## What you need
 
@@ -21,6 +23,10 @@ This is an early public alpha for Windows. It contains the v0.46.10 application 
 4. Install and start Vector using [docs/VECTOR_SETUP.md](docs/VECTOR_SETUP.md).
 5. Run `CHECK_SETUP.bat`. It only performs read-only health checks.
 6. Run `START_GWENDOLYN_VECTOR.bat`.
+
+For the separate audio-signal path, start Signal Lab first and then run
+`START_GWENDOLYN_SIGNAL_LAB.bat`. The two launchers deliberately select distinct
+session modes so a session cannot control both applications by accident.
 
 The setup script creates local copies of the four `*.example.json` files. Edit those local JSON files to change the model, name, personality, speech backend and private vocabulary. They are deliberately ignored by Git.
 

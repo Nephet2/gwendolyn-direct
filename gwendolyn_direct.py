@@ -42,7 +42,7 @@ from tts_adapter import TTSAdapter
 from session_conductor import SessionConductor, due_seconds, valid_time, matches
 from restim_sensor_bridge import RestimSensorBridge
 
-APP_VERSION = "0.46.10-alpha2"
+APP_VERSION = "0.46.11-alpha1"
 SESSION_MODE = os.environ.get("GWENDOLYN_SESSION_MODE", "vector").strip().lower()
 if SESSION_MODE not in {"vector", "signal_lab"}:
     SESSION_MODE = "vector"
@@ -1925,6 +1925,10 @@ class GwendolynCore:
     def enqueue_voice(self, text: str, timings: Timings, voice_id: Optional[str] = None,
                       wait: bool = False, opening: bool = False) -> str:
         voice_id = voice_id or self.next_voice_tx("VOICE")
+        original_text = str(text or "").strip()
+        text = self._sanitize_model_text(original_text)
+        if text != original_text:
+            log(f"VOICE QUEUE sanitized model artifacts chars={len(original_text)}->{len(text)}")
         if not text or self._autonomous_interrupted():
             return voice_id
         if not self.claim_voice_tx(voice_id):
@@ -3671,6 +3675,22 @@ This personality governs selection, pacing and interpretation—not Vector truth
             expected = {k: v for k, v in args.items() if k != "reason"}
             return bool(expected and motion.get("active") and not motion.get("held")
                         and matches(expected, motion.get("plan")))
+        if name in {"vector_adjust_stroke_range", "vector_set_targeting"}:
+            state_modifier = (result.get("state") or {}).get("modifier") or {}
+            accepted_key = ("stroke_range" if name == "vector_adjust_stroke_range"
+                            else "targeting")
+            accepted_modifier = (accepted or {}).get(accepted_key) if isinstance(accepted, dict) else None
+            if not isinstance(accepted_modifier, dict):
+                return False
+            return all(matches(accepted_modifier.get(key), state_modifier.get(key))
+                       for key in ("enabled", "stroke_range", "position_bias")
+                       if key in accepted_modifier)
+        if name == "vector_restore_modifiers":
+            modifier = (result.get("state") or {}).get("modifier") or {}
+            return bool(matches(modifier.get("stroke_range"), 1.0)
+                        and matches(modifier.get("position_bias"), 0.0)
+                        and matches(modifier.get("smoothing"), 0.0)
+                        and matches(modifier.get("tempo_scale"), 1.0))
         key, desired = self._action_state_key_value(name, args)
         if key and desired is not None:
             actual = self._semantic_snapshot_from_state(result.get("state") or {}).get(key)
@@ -3714,9 +3734,10 @@ This personality governs selection, pacing and interpretation—not Vector truth
                 self.conductor.transition(m["id"], "failed", {"error": str(exc)})
             raise
         autonomous = getattr(self.director_thread, "generation", None) is not None
-        if (claimed or autonomous) and name in {"signal_lab_apply", "signal_lab_heart_tempo", "signal_lab_neutral"} and result.get("ok"):
+        if name in {"signal_lab_apply", "signal_lab_heart_tempo", "signal_lab_neutral"} and result.get("ok"):
             # The bridge's POST queues a GUI event. Confirm only after its live
             # readback matches that exact command, not merely the HTTP acknowledgement.
+            # This includes the preset baseline applied before autonomy has armed.
             deadline = time.monotonic() + 1.0
             while True:
                 try:
@@ -4447,6 +4468,7 @@ This personality governs selection, pacing and interpretation—not Vector truth
             "You have autonomous authority inside the active preset. "
             "Use the chosen narrative arc, current progress, recent conversation and exact live two-lane state. Respond to the user’s feedback: "
             "positive feedback normally supports holding or developing the successful quality; discomfort or reduction language must reduce the relevant dimension. "
+            "The preset starting frequency is an opening baseline, not a value to pin indefinitely. Across the session, deliberately explore different carrier/texture positions within the active preset unless the latest feedback supports holding the current texture. Avoid repeatedly returning both lanes to the minimum carrier, and allow the lanes to differ when that creates a purposeful relationship. "
             "Make a coherent perceptual decision, not random independent numbers. Preserve useful asymmetry. Prefer one principal perceptual change per decision; "
             "Electron will stage character changes before intensity. During the final ten percent, move toward a calmer ending. "
             f"The conducted session was anchored at narrative stage {self.conducted_narrative_anchor!r}; do not replay opening or baseline-establishment logic. "
@@ -4772,6 +4794,23 @@ This personality governs selection, pacing and interpretation—not Vector truth
     def _sanitize_model_text(text: str) -> str:
         """Remove hidden-reasoning leakage and malformed model artifacts."""
         value = (text or "").strip()
+        channel_artifacts = re.findall(
+            r"<\|channel>|<channel\|>|<\|(?:analysis|assistant|commentary|final|end|endoftext|im_start|im_end)\|?>",
+            value,
+            flags=re.I,
+        )
+        if channel_artifacts:
+            value = re.sub(r"<\|channel>\s*(?:thought|analysis|assistant|commentary|final)?", " ", value, flags=re.I)
+            value = re.sub(r"<channel\|>", " ", value, flags=re.I)
+            value = re.sub(
+                r"<\|(?:analysis|assistant|commentary|final|end|endoftext|im_start|im_end)\|?>",
+                " ",
+                value,
+                flags=re.I,
+            )
+            value = re.sub(r"(?im)^\s*(?:thought|analysis|assistant|commentary|final)\s*$", " ", value)
+            if len(channel_artifacts) >= 3 and len(re.sub(r"\W+", "", value)) < 24:
+                return ""
         if "</think>" in value.lower():
             value = re.split(r"</think>", value, flags=re.I)[-1]
         value = re.sub(r"<think>.*?</think>", " ", value, flags=re.I | re.S)
@@ -5782,8 +5821,17 @@ This personality governs selection, pacing and interpretation—not Vector truth
             preset = str(args.get("preset") or "")
             if preset == "authored":
                 return "Done. I’ve restored the authored stroke path."
+            focus = str(self.current_vector_semantic.get("bottom_focus") or "the selected bottom focus")
+            if preset.startswith("base_prostate_"):
+                width = preset.rsplit("_", 1)[-1]
+                return (f"Done. I’ve applied the {width} base/prostate targeting preset. "
+                        f"The bottom focus remains {focus}.")
+            if preset.startswith("glans_perineum_"):
+                width = preset.rsplit("_", 1)[-1]
+                return (f"Done. I’ve applied the {width} glans/perineum targeting preset. "
+                        f"The bottom focus remains {focus}.")
             label = preset.replace("_", " ")
-            return f"Done. I’ve applied the {label} targeting preset."
+            return f"Done. I’ve applied the {label} targeting preset; the bottom focus remains {focus}."
         if name == "vector_tempo_window":
             return f"Done. Tempo is at {float(args.get('scale', 1.0)):.1f}× for {int(args.get('duration_seconds', 0))} seconds, then Vector will restore the authored pace."
         if name == "vector_restore_modifiers":
@@ -6268,11 +6316,20 @@ This personality governs selection, pacing and interpretation—not Vector truth
                 # Clear deterministic commands already tell us exactly what happened.
                 # Do not pay for a second full-context Qwen pass after execution;
                 # short tempo windows were previously ending before narration began.
-                if direct or signal_request:
+                exact_vector_confirmation = any(
+                    str(item.get("name") or "") in {
+                        "vector_adjust_stroke_range", "vector_set_targeting",
+                        "vector_restore_modifiers",
+                    }
+                    for item in (self.last_action_ledger.get("executed") or [])
+                )
+                if direct or signal_request or exact_vector_confirmation:
                     reply = self._grounded_confirmation()
                     if signal_request:
                         self.pending_signal_lab_proposal = ""
-                    confirmation_kind = "Signal Lab" if signal_request else "direct action"
+                    confirmation_kind = ("Signal Lab" if signal_request else
+                                         ("exact Vector action" if exact_vector_confirmation
+                                          else "direct action"))
                     log(f"GROUNDING {confirmation_kind} confirmed without second Ollama pass")
                 else:
                     reply_msg = self.ollama_chat(follow_messages, None, phase="post-tool")
